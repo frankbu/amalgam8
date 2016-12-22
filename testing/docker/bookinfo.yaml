@@ -53,6 +53,7 @@ reviews-v2:
     - A8_CONTROLLER_URL=http://controller:8080
     - A8_CONTROLLER_POLL=5s
     - A8_REGISTRY_POLL=5s
+    - A8_PROXY_ADAPTER=envoy
   external_links:
     - controller
     - registry
@@ -68,6 +69,7 @@ reviews-v3:
     - A8_CONTROLLER_URL=http://controller:8080
     - A8_CONTROLLER_POLL=5s
     - A8_REGISTRY_POLL=5s
+    - A8_PROXY_ADAPTER=envoy
   external_links:
     - controller
     - registry
@@ -83,6 +85,7 @@ productpage-v1:
     - A8_CONTROLLER_URL=http://controller:8080
     - A8_CONTROLLER_POLL=5s
     - A8_REGISTRY_POLL=5s
+    - A8_PROXY_ADAPTER=envoy
   external_links:
     - controller
     - registry
