@@ -38,12 +38,21 @@ const (
 	IgnoreProcess = "ignore"
 )
 
-// Supported Service Registry/Discovery backends
+// Supported Service Registry/Discovery/Rules backends
 const (
 	Amalgam8Backend   = "amalgam8"
 	KubernetesBackend = "kubernetes"
 	EurekaBackend     = "eureka"
 )
+
+// Supported proxy adapters
+const (
+	NGINXAdapter = "nginx"
+	EnvoyAdapter = "envoy"
+)
+
+// SupportedAdapters is the set of supported proxy adapters
+var SupportedAdapters = []string{NGINXAdapter, EnvoyAdapter}
 
 // Command to be managed by sidecar app supervisor
 type Command struct {
@@ -66,26 +75,6 @@ type Endpoint struct {
 	Type string `yaml:"type"`
 }
 
-// Registry configuration
-type Registry struct {
-	Backend string `yaml:"backend"`
-
-	Amalgam8   Amalgam8Registry   `yaml:"amalgam8"`
-	Kubernetes KubernetesRegistry `yaml:"kubernetes"`
-	Eureka     EurekaRegistry     `yaml:"eureka"`
-
-	// for backward compatibility, support amalgam8 registry
-	// configuration directly under the `registry:` clause
-	Amalgam8Registry `yaml:",inline"`
-}
-
-// Controller configuration
-type Controller struct {
-	URL   string        `yaml:"url"`
-	Token string        `yaml:"token"`
-	Poll  time.Duration `yaml:"poll"`
-}
-
 // Dnsconfig - DNS server configuration
 type Dnsconfig struct {
 	Port   int    `yaml:"port"`
@@ -99,15 +88,22 @@ type Amalgam8Registry struct {
 	Poll  time.Duration `yaml:"poll"`
 }
 
-// KubernetesRegistry configuration
-type KubernetesRegistry struct {
+// Amalgam8Controller configuration
+type Amalgam8Controller struct {
+	URL   string        `yaml:"url"`
+	Token string        `yaml:"token"`
+	Poll  time.Duration `yaml:"poll"`
+}
+
+// Kubernetes configuration
+type Kubernetes struct {
 	URL       string `yaml:"url"`
 	Token     string `yaml:"token"`
 	Namespace string `yaml:"namespace"`
 }
 
-// EurekaRegistry configuration
-type EurekaRegistry struct {
+// Eureka configuration
+type Eureka struct {
 	URLs []string `yaml:"urls"`
 }
 
@@ -121,39 +117,55 @@ const (
 
 // HealthCheck configuration.
 type HealthCheck struct {
-	Type     string        `yaml:"type"`
-	Value    string        `yaml:"value"`
-	Interval time.Duration `yaml:"interval"`
-	Timeout  time.Duration `yaml:"timeout"`
-	Method   string        `yaml:"method"`
-	Code     int           `yaml:"code"`
-	Args     []string      `yaml:"args"`
+	Type       string        `yaml:"type"`
+	Value      string        `yaml:"value"`
+	Interval   time.Duration `yaml:"interval"`
+	Timeout    time.Duration `yaml:"timeout"`
+	Method     string        `yaml:"method"`
+	Code       int           `yaml:"code"`
+	Args       []string      `yaml:"args"`
+	CACertPath string        `yaml:"ca_cert_path"`
+}
+
+// ProxyConfig stores proxy configuration.
+type ProxyConfig struct {
+	TLS         bool   `yaml:"tls"`
+	CertPath    string `yaml:"cert_path"`
+	CertKeyPath string `yaml:"cert_key_path"`
+	CACertPath  string `yaml:"ca_cert_path"`
 }
 
 // Config stores the various configuration options for the sidecar
 type Config struct {
-	Register bool `yaml:"register"`
-	Proxy    bool `yaml:"proxy"`
-	DNS      bool `yaml:"dns"`
+	Register     bool   `yaml:"register"`
+	Proxy        bool   `yaml:"proxy"`
+	ProxyAdapter string `yaml:"proxy_adapter"`
+	DNS          bool   `yaml:"dns"`
 
 	Service  Service  `yaml:"service"`
 	Endpoint Endpoint `yaml:"endpoint"`
 
-	Registry   Registry   `yaml:"registry"`
-	Controller Controller `yaml:"controller"`
-	Dnsconfig  Dnsconfig  `yaml:"dnsconfig"`
+	DiscoveryBackend string `yaml:"discovery_backend"`
+	RulesBackend     string `yaml:"rules_backend"`
+
+	A8Registry   Amalgam8Registry   `yaml:"registry"`
+	A8Controller Amalgam8Controller `yaml:"controller"`
+	Kubernetes   Kubernetes         `yaml:"kubernetes"`
+	Eureka       Eureka             `yaml:"eureka"`
+
+	Dnsconfig Dnsconfig `yaml:"dnsconfig"`
 
 	Supervise bool `yaml:"supervise"`
 
 	HealthChecks []HealthCheck `yaml:"healthchecks"`
+
+	ProxyConfig ProxyConfig `yaml:"proxy_config"`
 
 	LogLevel string `yaml:"log_level"`
 
 	Commands []Command `yaml:"commands"`
 
 	Debug string
-
-	DiscoveryPort int
 }
 
 // New creates a new Config object from the given commandline flags, environment variables, and configuration file context.
@@ -174,13 +186,6 @@ func New(context *cli.Context) (*Config, error) {
 	err := config.loadFromContext(context)
 	if err != nil {
 		return nil, err
-	}
-
-	// for backward compatibility, support amalgam8 registry
-	// configuration directly under the `registry:` clause
-	if config.Registry.URL != "" {
-		config.Registry.Backend = Amalgam8Backend
-		config.Registry.Amalgam8 = config.Registry.Amalgam8Registry
 	}
 
 	if config.Endpoint.Host == "" {
@@ -238,27 +243,32 @@ func (c *Config) loadFromContext(context *cli.Context) error {
 
 	loadFromContextIfSet(&c.Register, registerFlag)
 	loadFromContextIfSet(&c.Proxy, proxyFlag)
+	loadFromContextIfSet(&c.ProxyConfig.TLS, proxyTLSFlag)
+	loadFromContextIfSet(&c.ProxyConfig.CertPath, proxyCertPathFlag)
+	loadFromContextIfSet(&c.ProxyConfig.CertKeyPath, proxyCertKeyPathFlag)
+	loadFromContextIfSet(&c.ProxyConfig.CACertPath, proxyCACertPathFlag)
+	loadFromContextIfSet(&c.ProxyAdapter, proxyAdapterFlag)
 	loadFromContextIfSet(&c.DNS, dnsFlag)
 	loadFromContextIfSet(&c.Endpoint.Host, endpointHostFlag)
 	loadFromContextIfSet(&c.Endpoint.Port, endpointPortFlag)
 	loadFromContextIfSet(&c.Endpoint.Type, endpointTypeFlag)
-	loadFromContextIfSet(&c.Registry.Backend, registryBackendFlag)
-	loadFromContextIfSet(&c.Registry.Amalgam8.URL, registryURLFlag)
-	loadFromContextIfSet(&c.Registry.Amalgam8.Token, registryTokenFlag)
-	loadFromContextIfSet(&c.Registry.Amalgam8.Poll, registryPollFlag)
-	loadFromContextIfSet(&c.Registry.Kubernetes.URL, kubernetesURLFlag)
-	loadFromContextIfSet(&c.Registry.Kubernetes.Token, kubernetesTokenFlag)
-	loadFromContextIfSet(&c.Registry.Kubernetes.Namespace, kubernetesNamespaceFlag)
-	loadFromContextIfSet(&c.Registry.Eureka.URLs, eurekaURLFlag)
-	loadFromContextIfSet(&c.Controller.URL, controllerURLFlag)
-	loadFromContextIfSet(&c.Controller.Token, controllerTokenFlag)
-	loadFromContextIfSet(&c.Controller.Poll, controllerPollFlag)
+	loadFromContextIfSet(&c.DiscoveryBackend, discoveryBackendFlag)
+	loadFromContextIfSet(&c.RulesBackend, rulesBackendFlag)
+	loadFromContextIfSet(&c.A8Registry.URL, registryURLFlag)
+	loadFromContextIfSet(&c.A8Registry.Token, registryTokenFlag)
+	loadFromContextIfSet(&c.A8Registry.Poll, registryPollFlag)
+	loadFromContextIfSet(&c.A8Controller.URL, controllerURLFlag)
+	loadFromContextIfSet(&c.A8Controller.Token, controllerTokenFlag)
+	loadFromContextIfSet(&c.A8Controller.Poll, controllerPollFlag)
+	loadFromContextIfSet(&c.Kubernetes.URL, kubernetesURLFlag)
+	loadFromContextIfSet(&c.Kubernetes.Token, kubernetesTokenFlag)
+	loadFromContextIfSet(&c.Kubernetes.Namespace, kubernetesNamespaceFlag)
+	loadFromContextIfSet(&c.Eureka.URLs, eurekaURLFlag)
 	loadFromContextIfSet(&c.Supervise, superviseFlag)
 	loadFromContextIfSet(&c.Dnsconfig.Port, dnsConfigPortFlag)
 	loadFromContextIfSet(&c.Dnsconfig.Domain, dnsConfigDomainFlag)
 	loadFromContextIfSet(&c.LogLevel, logLevelFlag)
 	loadFromContextIfSet(&c.Debug, debugFlag)
-	loadFromContextIfSet(&c.DiscoveryPort, discoveryPortFlag)
 
 	if context.IsSet(serviceFlag) {
 		name, tags := parseServiceNameAndTags(context.String(serviceFlag))
@@ -350,12 +360,19 @@ func (c *Config) Validate() error {
 	)
 
 	validators = append(validators,
-		IsInSet("Registry backend", c.Registry.Backend, []string{Amalgam8Backend, KubernetesBackend, EurekaBackend}),
-		IsEmptyOrValidURL("Amalgam8 Registry URL", c.Registry.Amalgam8.URL),
-		IsEmptyOrValidURL("Kubernetes URL", c.Registry.Kubernetes.URL),
-		IsInRange("Service Discovery Port", c.DiscoveryPort, 1, 65535))
-	for _, url := range c.Registry.Eureka.URLs {
+		IsInSet("Discovery backend", c.DiscoveryBackend, []string{Amalgam8Backend, KubernetesBackend, EurekaBackend}),
+		IsEmptyOrValidURL("Amalgam8 Registry URL", c.A8Registry.URL),
+		IsEmptyOrValidURL("Kubernetes URL", c.Kubernetes.URL))
+
+	for _, url := range c.Eureka.URLs {
 		validators = append(validators, IsEmptyOrValidURL("Eureka URL", url))
+	}
+
+	if c.DiscoveryBackend == Amalgam8Backend {
+		validators = append(validators,
+			IsValidURL("Amalgam8 Registry URL", c.A8Registry.URL),
+			IsInRangeDuration("Amalgam8 Registry polling interval", c.A8Registry.Poll, 5*time.Second, 1*time.Hour))
+
 	}
 
 	if c.Register {
@@ -369,11 +386,23 @@ func (c *Config) Validate() error {
 	}
 
 	if c.Proxy {
-		validators = append(validators,
-			IsValidURL("Controller URL", c.Controller.URL),
-			IsInRangeDuration("Controller polling interval", c.Controller.Poll, 5*time.Second, 1*time.Hour),
-		)
+		validators = append(
+			validators,
+			IsInSet("Rules service backend", c.RulesBackend, []string{Amalgam8Backend, KubernetesBackend}),
+			IsInSet("Proxy adapter", c.ProxyAdapter, SupportedAdapters))
+		if c.RulesBackend == Amalgam8Backend {
+			validators = append(validators,
+				IsValidURL("Amalgam8 Controller URL", c.A8Controller.URL),
+				IsInRangeDuration("Amalgam8 Controller polling interval", c.A8Controller.Poll, 5*time.Second, 1*time.Hour))
+		}
 
+		if c.ProxyConfig.TLS {
+			validators = append(validators,
+				IsNotEmpty("Certificate path", c.ProxyConfig.CertPath),
+				IsNotEmpty("Certificate key path", c.ProxyConfig.CertKeyPath),
+				IsNotEmpty("CA certificate path", c.ProxyConfig.CACertPath),
+			)
+		}
 	}
 
 	if c.DNS {

@@ -19,14 +19,6 @@ es:
     - 9300
     - "30200:9200"
   container_name: elasticsearch
-logstash:
-  image: logstash
-  command: logstash --verbose -e "input { beats {codec=>'json' port=>8092}} output {elasticsearch {hosts =>'es:9200' codec=>'json'} }"
-  ports:
-    - "8092:8092"
-  links:
-    - es
-  container_name: logstash
 kibana:
   image: kibana
   links:
@@ -69,3 +61,15 @@ redis:
   ports:
     - "31400:6379"
   container_name: redis
+
+#######Gremlin###########
+
+gremlin:
+  image: amalgam8/gremlin
+  ports:
+    - "31500:5000"
+  links:
+    - es
+    - controller
+    - registry
+  container_name: gremlin

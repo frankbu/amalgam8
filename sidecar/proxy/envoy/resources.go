@@ -13,13 +13,13 @@ type DelayFilter struct {
 	Duration int    `json:"fixed_duration_ms,omitempty"`
 }
 
-// Header definition
+// Header https://lyft.github.io/envoy/docs/configuration/http_filters/fault_filter.html#config-http-filters-fault-injection-headers
 type Header struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
 
-// FilterFaultConfig definition
+// FilterFaultConfig https://lyft.github.io/envoy/docs/configuration/http_filters/fault_filter.html
 type FilterFaultConfig struct {
 	Abort   *AbortFilter `json:"abort,omitempty"`
 	Delay   *DelayFilter `json:"delay,omitempty"`
@@ -38,11 +38,13 @@ type Filter struct {
 	Config interface{} `json:"config"`
 }
 
+// Runtime definition
 type Runtime struct {
 	Key     string `json:"key"`
 	Default int    `json:"default"`
 }
 
+// Route https://lyft.github.io/envoy/docs/configuration/http_conn_man/route_config/route.html#config-http-conn-man-route-table-route
 type Route struct {
 	Runtime       *Runtime `json:"runtime,omitempty"`
 	Prefix        string   `json:"prefix"`
@@ -51,14 +53,14 @@ type Route struct {
 	Headers       []Header `json:"headers,omitempty"`
 }
 
-// VirtualHost definition
+// VirtualHost https://lyft.github.io/envoy/docs/configuration/http_conn_man/route_config/vhost.html#config-http-conn-man-route-table-vhost
 type VirtualHost struct {
 	Name    string   `json:"name"`
 	Domains []string `json:"domains"`
 	Routes  []Route  `json:"routes"`
 }
 
-// RouteConfig definition
+// RouteConfig https://lyft.github.io/envoy/docs/configuration/http_conn_man/route_config/route_config.html#config-http-conn-man-route-table
 type RouteConfig struct {
 	VirtualHosts []VirtualHost `json:"virtual_hosts"`
 }
@@ -80,20 +82,20 @@ type NetworkFilterConfig struct {
 	AccessLog         []AccessLog `json:"access_log"`
 }
 
-// NetworkFilter definition
+// NetworkFilter https://lyft.github.io/envoy/docs/configuration/listeners/filters.html#config-listener-filters
 type NetworkFilter struct {
 	Type   string              `json:"type"`
 	Name   string              `json:"name"`
 	Config NetworkFilterConfig `json:"config"`
 }
 
-// Listener definition
+// Listener https://lyft.github.io/envoy/docs/configuration/listeners/listeners.html#config-listeners
 type Listener struct {
 	Port    int             `json:"port"`
 	Filters []NetworkFilter `json:"filters"`
 }
 
-// Admin definition
+// Admin https://lyft.github.io/envoy/docs/configuration/overview/admin.html#config-admin
 type Admin struct {
 	AccessLogPath string `json:"access_log_path"`
 	Port          int    `json:"port"`
@@ -104,7 +106,7 @@ type Host struct {
 	URL string `json:"url"`
 }
 
-// Cluster definition
+// Cluster https://lyft.github.io/envoy/docs/configuration/cluster_manager/cluster.html#config-cluster-manager-cluster
 type Cluster struct {
 	Name                     string `json:"name"`
 	ServiceName              string `json:"service_name,omitempty"`
@@ -115,38 +117,44 @@ type Cluster struct {
 	Hosts                    []Host `json:"hosts,omitempty"`
 }
 
+// ClustersByName implment sort
 type ClustersByName []Cluster
 
+// Len length
 func (s ClustersByName) Len() int {
 	return len(s)
 }
 
+// Swap elements
 func (s ClustersByName) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
+// Less compare
 func (s ClustersByName) Less(i, j int) bool {
 	return s[i].Name < s[j].Name
 }
 
+// SDS https://lyft.github.io/envoy/docs/configuration/cluster_manager/sds.html#config-cluster-manager-sds
 type SDS struct {
 	Cluster        Cluster `json:"cluster"`
 	RefreshDelayMs int     `json:"refresh_delay_ms"`
 }
 
-// ClusterManager definition
+// ClusterManager https://lyft.github.io/envoy/docs/configuration/cluster_manager/cluster_manager.html#config-cluster-manager
 type ClusterManager struct {
 	Clusters []Cluster `json:"clusters"`
 	SDS      SDS       `json:"sds"`
 }
 
+// RootRuntime https://lyft.github.io/envoy/docs/configuration/overview/overview.html
 type RootRuntime struct {
 	SymlinkRoot          string `json:"symlink_root"`
 	Subdirectory         string `json:"subdirectory"`
 	OverrideSubdirectory string `json:"override_subdirectory,omitempty"`
 }
 
-// Root definition
+// Config https://lyft.github.io/envoy/docs/configuration/overview/overview.html
 type Config struct {
 	RootRuntime    RootRuntime    `json:"runtime"`
 	Listeners      []Listener     `json:"listeners"`

@@ -3,25 +3,24 @@ package envoy
 import (
 	"bytes"
 	"encoding/json"
-	"io"
-	"os"
-	"sort"
-
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
+	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/amalgam8/amalgam8/controller/rules"
 	"github.com/amalgam8/amalgam8/pkg/api"
 )
 
+// EnvoyConfigPath path to envoy config file
 const EnvoyConfigPath = "/etc/envoy/envoy.json"
 
 // Manager for updating envoy proxy configuration.
 type Manager interface {
-	Update(instances []api.ServiceInstance, rules []rules.Rule) error
+	Update(instances []api.ServiceInstance, rules []api.Rule) error
 }
 
 // NewManager creates new instance
@@ -39,7 +38,7 @@ type manager struct {
 	service     Service
 }
 
-func (m *manager) Update(instances []api.ServiceInstance, rules []rules.Rule) error {
+func (m *manager) Update(instances []api.ServiceInstance, rules []api.Rule) error {
 	conf, err := generateConfig(rules, instances, m.serviceName, m.tags)
 	if err != nil {
 		return err
@@ -84,7 +83,7 @@ func writeConfig(w io.Writer, conf Config) error {
 	return err
 }
 
-func generateConfig(rules []rules.Rule, instances []api.ServiceInstance, serviceName string, tags []string) (Config, error) {
+func generateConfig(rules []api.Rule, instances []api.ServiceInstance, serviceName string, tags []string) (Config, error) {
 	sanitizeRules(rules)
 	rules = addDefaultRouteRules(rules, instances)
 
@@ -99,7 +98,7 @@ func generateConfig(rules []rules.Rule, instances []api.ServiceInstance, service
 
 	return Config{
 		RootRuntime: RootRuntime{
-			SymlinkRoot:  RuntimePath,
+			SymlinkRoot:  runtimePath,
 			Subdirectory: "traffic_shift",
 		},
 		Listeners: []Listener{
@@ -161,8 +160,8 @@ const (
 	ctrlSplit = 's' // Split control character
 )
 
-// BuildServiceKey
-func BuildServiceKey(service string, tags []string) string {
+// buildServiceKey returns key containing service name and its tags
+func buildServiceKey(service string, tags []string) string {
 	sort.Strings(tags) // FIXME: by reference
 
 	// Guesstimate the required buffer capacity by assuming the typical individual tag length is 10 or less and that
@@ -191,7 +190,7 @@ func BuildServiceKey(service string, tags []string) string {
 	return buf.String()
 }
 
-// ParseServiceKey
+// ParseServiceKey returns service name and its tags
 func ParseServiceKey(key string) (string, []string) {
 	res := make([]string, 0, 6) // We guesstimate that most keys are composed of at most 1 service name + 5 tags.
 	buf := bytes.NewBuffer(make([]byte, 0, len(key)))
@@ -228,12 +227,12 @@ func ParseServiceKey(key string) (string, []string) {
 	return service, tags
 }
 
-func buildClusters(rules []rules.Rule) []Cluster {
+func buildClusters(rules []api.Rule) []Cluster {
 	clusterMap := make(map[string]struct{})
 	for _, rule := range rules {
 		if rule.Route != nil {
 			for _, backend := range rule.Route.Backends {
-				key := BuildServiceKey(backend.Name, backend.Tags)
+				key := buildServiceKey(backend.Name, backend.Tags)
 				clusterMap[key] = struct{}{}
 			}
 		}
@@ -258,10 +257,10 @@ func buildClusters(rules []rules.Rule) []Cluster {
 }
 
 func buildWeightKey(service string, tags []string) string {
-	return fmt.Sprintf("%v.%v", service, BuildServiceKey("_", tags))
+	return fmt.Sprintf("%v.%v", service, buildServiceKey("_", tags))
 }
 
-func buildRoutes(ruleList []rules.Rule) []Route {
+func buildRoutes(ruleList []api.Rule) []Route {
 	var routes []Route
 	for _, rule := range ruleList {
 		if rule.Route != nil {
@@ -280,7 +279,7 @@ func buildRoutes(ruleList []rules.Rule) []Route {
 			}
 
 			for _, backend := range rule.Route.Backends {
-				clusterName := BuildServiceKey(backend.Name, backend.Tags)
+				clusterName := buildServiceKey(backend.Name, backend.Tags)
 
 				runtime := &Runtime{
 					Key:     buildWeightKey(backend.Name, backend.Tags),
@@ -303,21 +302,25 @@ func buildRoutes(ruleList []rules.Rule) []Route {
 	return routes
 }
 
-type ByPriority []rules.Rule
+// ByPriority implement sort
+type ByPriority []api.Rule
 
+// Len length
 func (s ByPriority) Len() int {
 	return len(s)
 }
 
+// Swap elements
 func (s ByPriority) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
+// Less compare
 func (s ByPriority) Less(i, j int) bool {
 	return s[i].Priority < s[j].Priority
 }
 
-func sanitizeRules(ruleList []rules.Rule) {
+func sanitizeRules(ruleList []api.Rule) {
 	for i := range ruleList {
 		rule := &ruleList[i]
 		if rule.Route != nil {
@@ -354,7 +357,7 @@ func sanitizeRules(ruleList []rules.Rule) {
 	sort.Sort(sort.Reverse(ByPriority(ruleList))) // Descending order
 }
 
-func addDefaultRouteRules(ruleList []rules.Rule, instances []api.ServiceInstance) []rules.Rule {
+func addDefaultRouteRules(ruleList []api.Rule, instances []api.ServiceInstance) []api.Rule {
 	serviceMap := make(map[string]struct{})
 	for _, instance := range instances {
 		serviceMap[instance.ServiceName] = struct{}{}
@@ -369,11 +372,11 @@ func addDefaultRouteRules(ruleList []rules.Rule, instances []api.ServiceInstance
 	}
 
 	// Provide defaults for all services without any routing rules.
-	defaults := make([]rules.Rule, 0, len(serviceMap))
+	defaults := make([]api.Rule, 0, len(serviceMap))
 	for service := range serviceMap {
-		defaults = append(defaults, rules.Rule{
-			Route: &rules.Route{
-				Backends: []rules.Backend{
+		defaults = append(defaults, api.Rule{
+			Route: &api.Route{
+				Backends: []api.Backend{
 					{
 						Name:   service,
 						Weight: 1.0,
@@ -387,12 +390,11 @@ func addDefaultRouteRules(ruleList []rules.Rule, instances []api.ServiceInstance
 }
 
 const (
-	ConfigPath          = "/etc/envoy"
-	RuntimePath         = "/etc/envoy/runtime/routing"
-	RuntimeVersionsPath = "/etc/envoy/routing_versions"
+	runtimePath         = "/etc/envoy/runtime/routing"
+	runtimeVersionsPath = "/etc/envoy/routing_versions"
 
-	ConfigDirPerm  = 0775
-	ConfigFilePerm = 0664
+	configDirPerm  = 0775
+	configFilePerm = 0664
 )
 
 // FIXME: doesn't check for name conflicts
@@ -406,7 +408,7 @@ func randFilename(prefix string) string {
 	return fmt.Sprintf("%s%s", prefix, data)
 }
 
-func buildFS(ruleList []rules.Rule) error {
+func buildFS(ruleList []api.Rule) error {
 	type weightSpec struct {
 		Service string
 		Cluster string
@@ -421,7 +423,7 @@ func buildFS(ruleList []rules.Rule) error {
 				w += int(100 * backend.Weight)
 				weight := weightSpec{
 					Service: backend.Name,
-					Cluster: BuildServiceKey("_", backend.Tags),
+					Cluster: buildServiceKey("_", backend.Tags),
 					Weight:  w,
 				}
 				weights = append(weights, weight)
@@ -429,15 +431,15 @@ func buildFS(ruleList []rules.Rule) error {
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Dir(RuntimePath), ConfigDirPerm); err != nil { // FIXME: hack
+	if err := os.MkdirAll(filepath.Dir(runtimePath), configDirPerm); err != nil { // FIXME: hack
 		return err
 	}
 
-	if err := os.MkdirAll(RuntimeVersionsPath, ConfigDirPerm); err != nil {
+	if err := os.MkdirAll(runtimeVersionsPath, configDirPerm); err != nil {
 		return err
 	}
 
-	dirName, err := ioutil.TempDir(RuntimeVersionsPath, "")
+	dirName, err := ioutil.TempDir(runtimeVersionsPath, "")
 	if err != nil {
 		return err
 	}
@@ -450,18 +452,18 @@ func buildFS(ruleList []rules.Rule) error {
 	}()
 
 	for _, weight := range weights {
-		if err := os.MkdirAll(filepath.Join(dirName, "/traffic_shift/", weight.Service), ConfigDirPerm); err != nil {
+		if err := os.MkdirAll(filepath.Join(dirName, "/traffic_shift/", weight.Service), configDirPerm); err != nil {
 			return err
 		} // FIXME: filemode?
 
 		filename := filepath.Join(dirName, "/traffic_shift/", weight.Service, weight.Cluster)
 		data := []byte(fmt.Sprintf("%v", weight.Weight))
-		if err := ioutil.WriteFile(filename, data, ConfigFilePerm); err != nil {
+		if err := ioutil.WriteFile(filename, data, configFilePerm); err != nil {
 			return err
 		}
 	}
 
-	oldRuntime, err := os.Readlink(RuntimePath)
+	oldRuntime, err := os.Readlink(runtimePath)
 	if err != nil && !os.IsNotExist(err) { // Ignore error from symlink not existing.
 		return err
 	}
@@ -473,7 +475,7 @@ func buildFS(ruleList []rules.Rule) error {
 	}
 
 	// Atomically replace the runtime symlink
-	if err := os.Rename(tmpName, RuntimePath); err != nil {
+	if err := os.Rename(tmpName, runtimePath); err != nil {
 		return err
 	}
 
@@ -483,8 +485,8 @@ func buildFS(ruleList []rules.Rule) error {
 	// TODO: make this safer
 	if oldRuntime != "" {
 		oldRuntimeDir := filepath.Dir(oldRuntime)
-		if filepath.Clean(oldRuntimeDir) == filepath.Clean(RuntimeVersionsPath) {
-			toDelete := filepath.Join(RuntimeVersionsPath, filepath.Base(oldRuntime))
+		if filepath.Clean(oldRuntimeDir) == filepath.Clean(runtimeVersionsPath) {
+			toDelete := filepath.Join(runtimeVersionsPath, filepath.Base(oldRuntime))
 			if err := os.RemoveAll(toDelete); err != nil {
 				return err
 			}
@@ -494,7 +496,7 @@ func buildFS(ruleList []rules.Rule) error {
 	return nil
 }
 
-func buildFaults(ctlrRules []rules.Rule, serviceName string, tags []string) []Filter {
+func buildFaults(ctlrRules []api.Rule, serviceName string, tags []string) []Filter {
 	var filters []Filter
 
 	tagMap := make(map[string]struct{})
@@ -526,7 +528,7 @@ func buildFaults(ctlrRules []rules.Rule, serviceName string, tags []string) []Fi
 					for _, action := range rule.Actions {
 						switch action.GetType() {
 						case "delay":
-							delay := action.Internal().(rules.DelayAction)
+							delay := action.Internal().(api.DelayAction)
 							filter := Filter{
 								Type: "decoder",
 								Name: "fault",
@@ -541,7 +543,7 @@ func buildFaults(ctlrRules []rules.Rule, serviceName string, tags []string) []Fi
 							}
 							filters = append(filters, filter)
 						case "abort":
-							abort := action.Internal().(rules.AbortAction)
+							abort := action.Internal().(api.AbortAction)
 							filter := Filter{
 								Type: "decoder",
 								Name: "fault",

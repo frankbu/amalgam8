@@ -4,18 +4,17 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/amalgam8/amalgam8/controller/rules"
 	"github.com/amalgam8/amalgam8/pkg/api"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestSanitizeRules(t *testing.T) {
-	rules := []rules.Rule{
+	rules := []api.Rule{
 		{
 			ID:          "abcdef",
 			Destination: "service1",
-			Route: &rules.Route{
-				Backends: []rules.Backend{
+			Route: &api.Route{
+				Backends: []api.Backend{
 					{
 						Name:   "service1",
 						Tags:   []string{"tag1"},
@@ -31,8 +30,8 @@ func TestSanitizeRules(t *testing.T) {
 		{
 			ID:          "abcdef",
 			Destination: "service2",
-			Route: &rules.Route{
-				Backends: []rules.Backend{
+			Route: &api.Route{
+				Backends: []api.Backend{
 					{
 						Tags: []string{"tag1"},
 					},
@@ -55,12 +54,12 @@ func TestSanitizeRules(t *testing.T) {
 }
 
 func TestFS(t *testing.T) {
-	rules := []rules.Rule{
+	rules := []api.Rule{
 		{
 			ID:          "abcdef",
 			Destination: "service1",
-			Route: &rules.Route{
-				Backends: []rules.Backend{
+			Route: &api.Route{
+				Backends: []api.Backend{
 					{
 						Name:   "service1",
 						Tags:   []string{"tag1"},
@@ -72,8 +71,8 @@ func TestFS(t *testing.T) {
 		{
 			ID:          "abcdef",
 			Destination: "service1",
-			Route: &rules.Route{
-				Backends: []rules.Backend{
+			Route: &api.Route{
+				Backends: []api.Backend{
 					{
 						Name:   "service1",
 						Tags:   []string{"tag1", "tag2"},
@@ -85,7 +84,7 @@ func TestFS(t *testing.T) {
 		{
 			ID:          "abcdef",
 			Destination: "service2",
-			Actions:     []rules.Action{},
+			Actions:     []api.Action{},
 		},
 	}
 
@@ -139,12 +138,12 @@ func TestFS(t *testing.T) {
 }
 
 func TestBuildClusters(t *testing.T) {
-	rules := []rules.Rule{
+	rules := []api.Rule{
 		{
 			ID:          "abcdef",
 			Destination: "service1",
-			Route: &rules.Route{
-				Backends: []rules.Backend{
+			Route: &api.Route{
+				Backends: []api.Backend{
 					{
 						Name:   "service1",
 						Tags:   []string{"tag1"},
@@ -156,8 +155,8 @@ func TestBuildClusters(t *testing.T) {
 		{
 			ID:          "abcdef",
 			Destination: "service1",
-			Route: &rules.Route{
-				Backends: []rules.Backend{
+			Route: &api.Route{
+				Backends: []api.Backend{
 					{
 						Name:   "service1",
 						Tags:   []string{"tag1", "tag2"},
@@ -169,8 +168,8 @@ func TestBuildClusters(t *testing.T) {
 		{
 			ID:          "abcdef",
 			Destination: "service2",
-			Route: &rules.Route{
-				Backends: []rules.Backend{
+			Route: &api.Route{
+				Backends: []api.Backend{
 					{
 						Name:   "service2",
 						Tags:   []string{},
@@ -182,7 +181,7 @@ func TestBuildClusters(t *testing.T) {
 		{
 			ID:          "abcdef",
 			Destination: "service2",
-			Actions:     []rules.Action{},
+			Actions:     []api.Action{},
 		},
 	}
 
@@ -242,7 +241,7 @@ func TestBuildParseServiceKey(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		s := BuildServiceKey(testCase.Service, testCase.Tags)
+		s := buildServiceKey(testCase.Service, testCase.Tags)
 		service, tags := ParseServiceKey(s)
 		assert.Equal(t, testCase.Service, service)
 		assert.Equal(t, testCase.Tags, tags)
@@ -292,12 +291,12 @@ func TestConvert2(t *testing.T) {
 		},
 	}
 
-	rules := []rules.Rule{
+	rules := []api.Rule{
 		{
 			ID:          "abcdef",
 			Destination: "service1",
-			Route: &rules.Route{
-				Backends: []rules.Backend{
+			Route: &api.Route{
+				Backends: []api.Backend{
 					{
 						Name: "service1",
 						Tags: []string{"tag1"},
@@ -308,8 +307,8 @@ func TestConvert2(t *testing.T) {
 		{
 			ID:          "abcdef",
 			Destination: "service1",
-			Route: &rules.Route{
-				Backends: []rules.Backend{
+			Route: &api.Route{
+				Backends: []api.Backend{
 					{
 						Name: "service1",
 						Tags: []string{"tag1", "tag2"},
@@ -320,7 +319,7 @@ func TestConvert2(t *testing.T) {
 		{
 			ID:          "abcdef",
 			Destination: "service2",
-			Actions:     []rules.Action{},
+			Actions:     []api.Action{},
 		},
 	}
 
@@ -526,7 +525,7 @@ func TestBookInfo(t *testing.T) {
       ]
     }
   ]`)
-	var ruleList []rules.Rule
+	var ruleList []api.Rule
 	err := json.Unmarshal(ruleBytes, &ruleList)
 	assert.NoError(t, err)
 
@@ -611,7 +610,7 @@ func TestFaults(t *testing.T) {
       }
     }]`)
 
-	var ruleList []rules.Rule
+	var ruleList []api.Rule
 	err := json.Unmarshal(ruleBytes, &ruleList)
 	assert.NoError(t, err)
 

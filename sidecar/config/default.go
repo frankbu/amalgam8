@@ -18,47 +18,53 @@ import "time"
 
 // DefaultConfig defines default values for the various configuration options
 var DefaultConfig = Config{
-	Register: false,
-	Proxy:    false,
-	DNS:      false,
+	Register:     false,
+	Proxy:        false,
+	ProxyAdapter: NGINXAdapter,
+	DNS:          false,
+
+	ProxyConfig: ProxyConfig{
+		TLS:         false,
+		CertPath:    "",
+		CertKeyPath: "",
+		CACertPath:  "",
+	},
 
 	Service: Service{
 		Name: "",
 		Tags: nil,
 	},
+
 	Endpoint: Endpoint{
 		Host: "",
 		Port: 0,
 		Type: "http",
 	},
 
-	Registry: Registry{
-		Backend: Amalgam8Backend,
-		Amalgam8: Amalgam8Registry{
-			URL:   "",
-			Token: "",
-			Poll:  time.Duration(15 * time.Second),
-		},
-		Kubernetes: KubernetesRegistry{
-			URL:       "",
-			Token:     "",
-			Namespace: "",
-		},
-		Eureka: EurekaRegistry{
-			URLs: []string{},
-		},
+	DiscoveryBackend: Amalgam8Backend,
 
-		Amalgam8Registry: Amalgam8Registry{
-			URL:   "",
-			Token: "",
-			Poll:  time.Duration(15 * time.Second),
-		},
-	},
-
-	Controller: Controller{
+	A8Registry: Amalgam8Registry{
 		URL:   "",
 		Token: "",
 		Poll:  time.Duration(15 * time.Second),
+	},
+
+	A8Controller: Amalgam8Controller{
+		URL:   "",
+		Token: "",
+		Poll:  time.Duration(15 * time.Second),
+	},
+
+	RulesBackend: Amalgam8Backend,
+
+	Kubernetes: Kubernetes{
+		URL:       "",
+		Token:     "",
+		Namespace: "default",
+	},
+
+	Eureka: Eureka{
+		URLs: []string{},
 	},
 
 	Dnsconfig: Dnsconfig{
@@ -71,6 +77,4 @@ var DefaultConfig = Config{
 	LogLevel: "info",
 
 	Commands: nil,
-
-	DiscoveryPort: 6500,
 }

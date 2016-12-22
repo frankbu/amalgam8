@@ -25,11 +25,16 @@ const (
 	configFlag              = "config"
 	registerFlag            = "register"
 	proxyFlag               = "proxy"
+	proxyTLSFlag            = "proxy_tls"
+	proxyCertPathFlag       = "proxy_cert_path"
+	proxyCertKeyPathFlag    = "proxy_cert_key_path"
+	proxyCACertPathFlag     = "proxy_ca_cert_path"
+	proxyAdapterFlag        = "proxy_adapter"
 	serviceFlag             = "service"
 	endpointHostFlag        = "endpoint_host"
 	endpointPortFlag        = "endpoint_port"
 	endpointTypeFlag        = "endpoint_type"
-	registryBackendFlag     = "registry_backend"
+	discoveryBackendFlag    = "discovery_backend"
 	registryURLFlag         = "registry_url"
 	registryTokenFlag       = "registry_token"
 	registryPollFlag        = "registry_poll"
@@ -37,6 +42,7 @@ const (
 	kubernetesTokenFlag     = "kubernetes_token"
 	kubernetesNamespaceFlag = "kubernetes_namespace"
 	eurekaURLFlag           = "eureka_url"
+	rulesBackendFlag        = "rules_backend"
 	controllerURLFlag       = "controller_url"
 	controllerTokenFlag     = "controller_token"
 	controllerPollFlag      = "controller_poll"
@@ -47,7 +53,6 @@ const (
 	dnsConfigPortFlag       = "dns_port"
 	dnsConfigDomainFlag     = "dns_domain"
 	debugFlag               = "debug"
-	discoveryPortFlag       = "discovery_port"
 )
 
 // Flags is the set of supported flags
@@ -69,12 +74,37 @@ var Flags = []cli.Flag{
 	cli.BoolFlag{
 		Name:   proxyFlag,
 		EnvVar: envVar(proxyFlag),
-		Usage:  "Enable automatic service discovery and load balancing across services using NGINX",
+		Usage:  "Start proxy",
+	},
+	cli.StringFlag{
+		Name:   proxyAdapterFlag,
+		EnvVar: envVar(proxyAdapterFlag),
+		Usage:  fmt.Sprintf("Proxy adapter (%v)", strings.Join(SupportedAdapters, ", ")),
 	},
 	cli.BoolFlag{
 		Name:   dnsFlag,
 		EnvVar: envVar(dnsFlag),
 		Usage:  "Enable DNS server",
+	},
+	cli.BoolFlag{
+		Name:   proxyTLSFlag,
+		EnvVar: envVar(proxyTLSFlag),
+		Usage:  "Enable proxy TLS communication",
+	},
+	cli.StringFlag{
+		Name:   proxyCertPathFlag,
+		EnvVar: envVar(proxyCertPathFlag),
+		Usage:  "Location of server certificate for proxy inbound https requests",
+	},
+	cli.StringFlag{
+		Name:   proxyCertKeyPathFlag,
+		EnvVar: envVar(proxyCertKeyPathFlag),
+		Usage:  "Location of server private key for proxy inbound https requests",
+	},
+	cli.StringFlag{
+		Name:   proxyCACertPathFlag,
+		EnvVar: envVar(proxyCACertPathFlag),
+		Usage:  "Location of trusted CA certificate(s) for proxy outbound https services",
 	},
 	cli.StringFlag{
 		Name:   serviceFlag,
@@ -97,9 +127,9 @@ var Flags = []cli.Flag{
 		Usage:  "Service endpoint type (http, https, tcp, udp, user)",
 	},
 	cli.StringFlag{
-		Name:   registryBackendFlag,
-		EnvVar: envVar(registryBackendFlag),
-		Usage:  "Registry backend type (amalgam8, kubernetes, eureka)",
+		Name:   discoveryBackendFlag,
+		EnvVar: envVar(discoveryBackendFlag),
+		Usage:  fmt.Sprintf("Discovery backend (%s, %s, %s)", Amalgam8Backend, KubernetesBackend, EurekaBackend),
 	},
 	cli.StringFlag{
 		Name:   registryURLFlag,
@@ -137,21 +167,25 @@ var Flags = []cli.Flag{
 		Usage:  "List of Eureka server URLs",
 	},
 	cli.StringFlag{
+		Name:   rulesBackendFlag,
+		EnvVar: envVar(rulesBackendFlag),
+		Usage:  fmt.Sprintf("Rules service backend (%s, %s)", Amalgam8Backend, KubernetesBackend),
+	},
+	cli.StringFlag{
 		Name:   controllerURLFlag,
 		EnvVar: envVar(controllerURLFlag),
-		Usage:  "URL for Controller service",
+		Usage:  "URL for Amalgam8 Controller",
 	},
 	cli.StringFlag{
 		Name:   controllerTokenFlag,
 		EnvVar: envVar(controllerTokenFlag),
-		Usage:  "Amalgam8 controller token",
+		Usage:  "API token for Amalgam8 Controller",
 	},
 	cli.DurationFlag{
 		Name:   controllerPollFlag,
 		EnvVar: envVar(controllerPollFlag),
-		Usage:  "Interval for polling Controller",
+		Usage:  "Interval for polling Amalgam8 Rules",
 	},
-
 	cli.StringFlag{
 		Name:   dnsConfigPortFlag,
 		EnvVar: envVar(dnsConfigPortFlag),
@@ -176,11 +210,6 @@ var Flags = []cli.Flag{
 		Name:   logLevelFlag,
 		EnvVar: envVar(logLevelFlag),
 		Usage:  "Logging level (debug, info, warn, error, fatal, panic)",
-	},
-	cli.IntFlag{
-		Name:   discoveryPortFlag,
-		EnvVar: envVar(discoveryPortFlag),
-		Usage:  "Service discovery server port number",
 	},
 }
 
