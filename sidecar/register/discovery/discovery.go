@@ -149,7 +149,14 @@ func filterInstances(instances []*api.ServiceInstance, tags []string) []*api.Ser
 	for _, instance := range instances {
 		count := 0
 		for i := range instance.Tags {
-			_, exists := tagMap[instance.Tags[i]]
+			var tag string
+			vals := strings.Split(instance.Tags[i], "=")
+			if len(vals) >= 2 {
+				tag = vals[1]
+			} else {
+				tag = vals[0]
+			}
+			_, exists := tagMap[tag]
 			if exists {
 				count++
 			}
