@@ -51,16 +51,20 @@ type Host struct {
 	Tags   map[string]string `json:"tags"`
 }
 
+// ByIPPort ip and port based sorting for hosts.
 type ByIPPort []Host
 
+// Len length.
 func (s ByIPPort) Len() int {
 	return len(s)
 }
 
+// Swap elements.
 func (s ByIPPort) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
+// Less compare elements.
 func (s ByIPPort) Less(i, j int) bool {
 	if s[i].IPAddr == s[j].IPAddr {
 		return s[i].Port < s[j].Port
