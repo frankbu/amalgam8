@@ -12,7 +12,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-FROM lyft/envoy:latest
+FROM amalgam8/envoy:latest
 
 ADD bin/a8sidecar /usr/bin/a8sidecar
 
