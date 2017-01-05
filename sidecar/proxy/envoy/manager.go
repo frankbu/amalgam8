@@ -261,7 +261,7 @@ func buildWeightKey(service string, tags []string) string {
 }
 
 func buildRoutes(ruleList []api.Rule) []Route {
-	var routes []Route
+	routes := []Route{}
 	for _, rule := range ruleList {
 		if rule.Route != nil {
 			var headers []Header
