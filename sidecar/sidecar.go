@@ -260,12 +260,14 @@ func buildServiceRules(conf *config.Config, kubeClient kubernetes.Interface) (ap
 	}
 }
 
-func buildProxyAdapter(conf *config.Config, discovery monitor.DiscoveryMonitor, rules monitor.RulesMonitor) (proxy.Adapter, error) {
+func buildProxyAdapter(conf *config.Config, discovery monitor.DiscoveryMonitor, rules monitor.RulesMonitor,
+	discoveryClient api.ServiceDiscovery) (proxy.Adapter, error) {
+
 	switch conf.ProxyAdapter {
 	case config.NGINXAdapter:
 		return proxy.NewNGINXAdapter(conf, discovery, rules)
 	case config.EnvoyAdapter:
-		return proxy.NewEnvoyAdapter(conf, discovery, rules)
+		return proxy.NewEnvoyAdapter(conf, discovery, rules, discoveryClient)
 	default:
 		return nil, fmt.Errorf("Unsupported proxy adapter: %v", conf.ProxyAdapter)
 	}
@@ -287,7 +289,7 @@ func startProxy(conf *config.Config, discovery api.ServiceDiscovery, kubeClient 
 		Discovery: discovery,
 	})
 
-	proxyAdapter, err := buildProxyAdapter(conf, discoveryMonitor, rulesMonitor)
+	proxyAdapter, err := buildProxyAdapter(conf, discoveryMonitor, rulesMonitor, discovery)
 	if err != nil {
 		logrus.WithError(err).Error("Could not build proxy adapter")
 		return err
@@ -297,17 +299,6 @@ func startProxy(conf *config.Config, discovery api.ServiceDiscovery, kubeClient 
 		logrus.WithError(err).Error("Could not start proxy adapter")
 		return err
 	}
-
-	//controllerMonitor := monitor.NewControllerMonitor(monitor.ControllerConfig{
-	//	Client: controllerClient,
-	//	Listeners: []monitor.ControllerListener{
-	//		envoyProxy,
-	//	},
-	//	PollInterval: conf.Controller.Poll,
-
-	//Listeners: []monitor.RegistryListener{
-	//	envoyProxy,
-	//},
 
 	debugger := debug.NewAPI()
 	rulesMonitor.AddListener(debugger)

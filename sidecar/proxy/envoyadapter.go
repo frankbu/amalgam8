@@ -17,11 +17,14 @@ package proxy
 import (
 	"sync"
 
+	"fmt"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/amalgam8/amalgam8/pkg/api"
 	"github.com/amalgam8/amalgam8/sidecar/config"
 	"github.com/amalgam8/amalgam8/sidecar/proxy/envoy"
 	"github.com/amalgam8/amalgam8/sidecar/proxy/monitor"
+	"github.com/amalgam8/amalgam8/sidecar/register"
 )
 
 // EnvoyAdapter manages an Envoy based proxy.
@@ -37,8 +40,29 @@ type EnvoyAdapter struct {
 }
 
 // NewEnvoyAdapter creates a new adapter instance.
-func NewEnvoyAdapter(conf *config.Config, discoveryMonitor monitor.DiscoveryMonitor, rulesMonitor monitor.RulesMonitor) (*EnvoyAdapter, error) {
+func NewEnvoyAdapter(conf *config.Config, discoveryMonitor monitor.DiscoveryMonitor,
+	rulesMonitor monitor.RulesMonitor, discoveryClient api.ServiceDiscovery) (*EnvoyAdapter, error) {
+
 	manager := envoy.NewManager(conf.Service.Name, conf.Service.Tags)
+
+	if conf.DiscoveryPort == 0 {
+		conf.DiscoveryPort = 6500
+	}
+
+	serverConfig := &register.Config{
+		HTTPAddressSpec: fmt.Sprintf(":%d", conf.DiscoveryPort),
+		Discovery:       discoveryClient,
+	}
+	server, err := register.NewDiscoveryServer(serverConfig)
+	if err != nil {
+		logrus.WithError(err).Error("Discovery server failed to start")
+		return nil, err
+	}
+	err = server.Start()
+	if err != nil {
+		logrus.WithError(err).Error("Discovery server failed to start")
+		return nil, err
+	}
 
 	return &EnvoyAdapter{
 		manager:          manager,
