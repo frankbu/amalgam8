@@ -33,6 +33,7 @@ import (
 	"github.com/amalgam8/amalgam8/pkg/adapters/discovery/eureka"
 	kubediscovery "github.com/amalgam8/amalgam8/pkg/adapters/discovery/kubernetes"
 	amalgam8controller "github.com/amalgam8/amalgam8/pkg/adapters/rules/amalgam8"
+	kuberules "github.com/amalgam8/amalgam8/pkg/adapters/rules/kubernetes"
 	"github.com/amalgam8/amalgam8/pkg/api"
 	"github.com/amalgam8/amalgam8/pkg/auth"
 	kubepkg "github.com/amalgam8/amalgam8/pkg/kubernetes"
@@ -105,8 +106,8 @@ func Run(conf config.Config) error {
 	logrus.SetLevel(logrusLevel)
 
 	var kubeClient kubernetes.Interface
-	if conf.DiscoveryBackend == config.KubernetesBackend ||
-		conf.RulesBackend == config.KubernetesBackend {
+	if conf.DiscoveryAdapter == config.KubernetesAdapter ||
+		conf.RulesAdapter == config.KubernetesAdapter {
 		kubeClient, err = kubepkg.NewClient(kubepkg.Config{
 			URL:   conf.Kubernetes.URL,
 			Token: conf.Kubernetes.Token,
@@ -142,7 +143,7 @@ func Run(conf config.Config) error {
 	}
 
 	if conf.Proxy {
-		err := startProxy(&conf, discovery, kubeClient)
+		err := startProxy(&conf, discovery)
 		if err != nil {
 			logrus.WithError(err).Error("Could not start proxy")
 			return err
@@ -202,8 +203,8 @@ func Run(conf config.Config) error {
 }
 
 func buildServiceRegistry(conf *config.Config) (api.ServiceRegistry, error) {
-	switch strings.ToLower(conf.DiscoveryBackend) {
-	case config.Amalgam8Backend:
+	switch strings.ToLower(conf.DiscoveryAdapter) {
+	case config.Amalgam8Adapter:
 		regConf := amalgam8registry.RegistryConfig{
 			URL:       conf.A8Registry.URL,
 			AuthToken: conf.A8Registry.Token,
@@ -212,25 +213,25 @@ func buildServiceRegistry(conf *config.Config) (api.ServiceRegistry, error) {
 	case "":
 		return nil, fmt.Errorf("no service discovery type specified")
 	default:
-		return nil, fmt.Errorf("registration using '%s' is not supported", conf.DiscoveryBackend)
+		return nil, fmt.Errorf("registration using '%s' is not supported", conf.DiscoveryAdapter)
 	}
 }
 
 func buildServiceDiscovery(conf *config.Config, kubeClient kubernetes.Interface) (api.ServiceDiscovery, error) {
-	switch strings.ToLower(conf.DiscoveryBackend) {
-	case config.Amalgam8Backend:
+	switch strings.ToLower(conf.DiscoveryAdapter) {
+	case config.Amalgam8Adapter:
 		regConf := amalgam8registry.RegistryConfig{
 			URL:       conf.A8Registry.URL,
 			AuthToken: conf.A8Registry.Token,
 		}
 		return amalgam8registry.NewCachedDiscoveryAdapter(regConf, conf.A8Registry.Poll)
-	case config.KubernetesBackend:
+	case config.KubernetesAdapter:
 		kubConf := kubediscovery.Config{
 			Namespace: auth.NamespaceFrom(conf.Kubernetes.Namespace),
 			Client:    kubeClient,
 		}
 		return kubediscovery.New(kubConf)
-	case config.EurekaBackend:
+	case config.EurekaAdapter:
 		eurConf := eureka.Config{
 			URLs: conf.Eureka.URLs,
 		}
@@ -238,25 +239,29 @@ func buildServiceDiscovery(conf *config.Config, kubeClient kubernetes.Interface)
 	case "":
 		return nil, fmt.Errorf("no service discovery type specified")
 	default:
-		return nil, fmt.Errorf("discovery using '%s' is not supported", conf.DiscoveryBackend)
+		return nil, fmt.Errorf("discovery using '%s' is not supported", conf.DiscoveryAdapter)
 	}
 }
 
-func buildServiceRules(conf *config.Config, kubeClient kubernetes.Interface) (api.RulesService, error) {
-	switch strings.ToLower(conf.RulesBackend) {
-	case config.Amalgam8Backend:
+func buildServiceRules(conf *config.Config) (api.RulesService, error) {
+	switch strings.ToLower(conf.RulesAdapter) {
+	case config.Amalgam8Adapter:
 		controllerConf := amalgam8controller.ControllerConfig{
 			URL:       conf.A8Controller.URL,
 			AuthToken: conf.A8Controller.Token,
 		}
 		return amalgam8controller.NewCachedRulesAdapter(controllerConf, conf.A8Controller.Poll)
-	case config.KubernetesBackend:
-		// TODO: return kubernetes rules fetcher
-		return nil, fmt.Errorf("rules using '%s' is not supported", conf.RulesBackend)
+	case config.KubernetesAdapter:
+		kubConf := kuberules.Config{
+			URL:       conf.Kubernetes.URL,
+			Token:     conf.Kubernetes.Token,
+			Namespace: auth.NamespaceFrom(conf.Kubernetes.Namespace),
+		}
+		return kuberules.New(kubConf)
 	case "":
 		return nil, fmt.Errorf("no service rules type specified")
 	default:
-		return nil, fmt.Errorf("rules using '%s' is not supported", conf.RulesBackend)
+		return nil, fmt.Errorf("rules using '%s' is not supported", conf.RulesAdapter)
 	}
 }
 
@@ -270,11 +275,13 @@ func buildProxyAdapter(conf *config.Config, discovery monitor.DiscoveryMonitor, 
 		return proxy.NewEnvoyAdapter(conf, discovery, rules, discoveryClient)
 	default:
 		return nil, fmt.Errorf("Unsupported proxy adapter: %v", conf.ProxyAdapter)
+
 	}
 }
 
-func startProxy(conf *config.Config, discovery api.ServiceDiscovery, kubeClient kubernetes.Interface) error {
-	rules, err := buildServiceRules(conf, kubeClient)
+func startProxy(conf *config.Config, discovery api.ServiceDiscovery) error {
+
+	rules, err := buildServiceRules(conf)
 	if err != nil {
 		logrus.WithError(err).Error("Could not create service rules client")
 		return err
